@@ -1,14 +1,16 @@
+import logging
+import warnings
 import torch
+import time
 import torch.nn.functional as F
 from torch import nn
-from torchvision import models, transforms
-import time
+from torchvision import models
 import torch.optim as optim
 from predata import CarsDataset
-from torch.utils.data import Dataset, DataLoader
 
-import warnings
+
 warnings.filterwarnings("ignore")
+module_logger = logging.getLogger("main.model")
 
 
 class DenseNet161(nn.Module):
@@ -16,12 +18,13 @@ class DenseNet161(nn.Module):
     def __init__(self, num_classes=196, drop_rate=0):
         super(DenseNet161, self).__init__()
 
+        # create base model
         original_model = models.densenet161(pretrained=True, drop_rate=drop_rate)
         # get all layers from original model without last layer
         # and create our custom layer
         self.features = nn.Sequential(*list(original_model.children())[:-1])
 
-        # x4?
+        # TODO *4?
         self.out_labels = (nn.Linear(2208, num_classes))
         self.out_bbox = nn.Linear(2208, 4)
 
@@ -41,42 +44,35 @@ class DenseNet161(nn.Module):
     def load_model(self):
         pass
 
-cars_data = CarsDataset(mat_anno, data_dir, car_names,
-                        transform=transforms.Compose([
-                            transforms.Scale(250),
-                            transforms.RandomSizedCrop(224),
-                            transforms.RandomHorizontalFlip(),
-                            transforms.ToTensor(),
-                            transforms.Normalize((0.4706145, 0.46000465, 0.45479808),
-                                                 (0.26668432, 0.26578658, 0.2706199))
-                        ])
-                        )
+    @staticmethod
+    def train_model():
+        logger = logging.getLogger('main.model.Densenet161.train')
 
+        mat_anno = '/home/mirage/DNN/datasets/devkit/cars_train_annos.mat'
+        data_dir = '/home/mirage/DNN/datasets/cars_train'
+        car_names = '/home/mirage/DNN/datasets/devkit/cars_meta.mat'
 
-train_loader = DataLoader(cars_data, batch_size=1, shuffle=True)
+        train_loader = CarsDataset.load_data(mat_anno, data_dir, car_names)
 
-print(len(cars_data))
+        # create instance of net
+        model = DenseNet161()
 
-# start_time = time.time()
-model = DenseNet161()
-# x = torch.randn(1, 3, 512, 640)
-# output_labels, output_bbox = model(x)
-# print('finish time: {0}m'.format((time.time() - start_time)/60))
+        # set two criterion loss
+        criterion_label = nn.CrossEntropyLoss()
+        criterion_bbox = nn.MSELoss()
 
-# two criterion
-criterion_label = nn.CrossEntropyLoss()
-criterion_bbox = nn.MSELoss()
+        # set stochastic gradient descent?
+        optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9, weight_decay=1e-4)
+        # optimizer_ft = optim.Adam(model_ft.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
-optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9, weight_decay=1e-4)
-# optimizer_ft = optim.Adam(model_ft.parameters(), lr=learning_rate, weight_decay=weight_decay)
+        num_epochs = 1
+        model.train(True)
 
-num_epochs = 1
-print("Start training")
-model.train(True)
+        logger.info(' Start training ...')
+        for batch, (images, labels, bbox) in enumerate(train_loader):
+            logger.info(images)
+            logger.info(labels)
+            logger.info(bbox)
 
+            break
 
-for batch, (images, labels, bbox) in enumerate(train_loader):
-    print(images)
-    print(labels)
-    print(bbox)
-    break
