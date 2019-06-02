@@ -12,7 +12,7 @@ from torchvision import transforms
 class CarsDataset(Dataset):
     """Custom data set"""
 
-    def __init__(self, mat_anno, data_dir, car_names, transform=None):
+    def __init__(self, mat_anno, data_dir, car_names, transform=None, cuda=False):
         """
         Args:
             mat_anno (string): Path to the MATLAB annotation file.
@@ -32,6 +32,7 @@ class CarsDataset(Dataset):
         self.mat_anno = mat_anno
 
         self.transform = transform
+        self.cuda = cuda
 
     def __len__(self):
         return len(self.car_annotations)
@@ -47,6 +48,7 @@ class CarsDataset(Dataset):
                 self.car_annotations[idx][-5][0][0],
                 self.car_annotations[idx][-4][0][0],
                 self.car_annotations[idx][-3][0][0])
+
         bbox = torch.from_numpy(np.array(bbox, dtype=np.uint8))
 
         if self.transform:
@@ -67,23 +69,27 @@ class CarsDataset(Dataset):
 
     @staticmethod
     @timelog
-    def load_data(mat_anno, data_dir, car_names):
+    def load_data(data_dir):
         """load data, set transform for images"""
-        logger = logging.getLogger('main.predata.load_data')
 
-        cars_data = CarsDataset(mat_anno, data_dir, car_names,
-                                transform=transforms.Compose([
-                                    transforms.Scale(250),
-                                    transforms.RandomSizedCrop(224),
-                                    transforms.RandomHorizontalFlip(),
-                                    transforms.ToTensor(),
-                                    transforms.Normalize((0.4706145, 0.46000465, 0.45479808),
-                                                         (0.26668432, 0.26578658, 0.2706199))
-                                ])
-                                )
+        logger = logging.getLogger('main.predata.load_data')
+        try:
+            cars_data = CarsDataset(os.path.join(data_dir, 'devkit/cars_train_annos.mat'),
+                                    os.path.join(data_dir, 'cars_train'),
+                                    os.path.join(data_dir, 'devkit/cars_meta.mat'),
+                                    transform=transforms.Compose([
+                                        transforms.Scale(250),
+                                        transforms.RandomSizedCrop(224),
+                                        transforms.RandomHorizontalFlip(),
+                                        transforms.ToTensor(),
+                                        transforms.Normalize((0.4706145, 0.46000465, 0.45479808),
+                                                             (0.26668432, 0.26578658, 0.2706199))
+                                    ]),
+                                    )
+        except TypeError:
+            logger.exception('data error:')
 
         train_loader = DataLoader(cars_data, batch_size=1, shuffle=True)
-
         logger.info(' Size data: {}'.format(len(cars_data)))
 
         return train_loader
